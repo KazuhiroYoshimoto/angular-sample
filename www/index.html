@@ -1,0 +1,267 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <meta http-equiv="Content-Security-Policy" content="default-src * data:; style-src * 'unsafe-inline'; script-src * 'unsafe-inline' 'unsafe-eval'">
+    <script src="components/loader.js"></script>
+    <script src="lib/angular/angular.min.js"></script>
+    <script src="lib/onsenui/js/onsenui.min.js"></script>
+    <script src="lib/onsenui/js/angular-onsenui.min.js"></script>
+
+    <link rel="stylesheet" href="components/loader.css">
+    <link rel="stylesheet" href="lib/onsenui/css/onsenui.css">
+    <link rel="stylesheet" href="lib/onsenui/css/onsen-css-components.css">
+    <link rel="stylesheet" href="css/style.css">
+
+    <script>
+        var apiUrl = 'http://api.gnavi.co.jp/RestSearchAPI/20150630/';
+        var keyid = '***';
+        var format = 'json';
+        ons.bootstrap()
+          .controller('AppController', function($scope, $http) {
+              
+                  /*
+     ng-clickで実行される関数
+    */
+    $scope.showLikeTab = function(){
+         $scope.showLikeShop();
+    };
+
+    //検索
+    $scope.search = function() {
+        navigator.geolocation.getCurrentPosition(
+            function(position){
+                var latitude = position.coords.latitude;
+                var longitude = position.coords.longitude;
+                console.log(longitude);
+                var range = '1';
+                $http.get(apiUrl, {params: {keyid: keyid, format: format, latitude:latitude, longitude:longitude, range:range}})
+                    .success(function(data, status, headers, config) {
+                        $scope.searchShops = $scope.createShops(data);
+                       navi.pushPage('result.html');
+                    })
+                    .error(function(data, status, headers, config) {
+                        alert('error');
+                    });
+            },
+            function(error){
+                alert('code: '    + error.code    + '\n' +
+                  'message: ' + error.message + '\n');
+            }
+        );
+    };
+
+    //お気に入りを表示
+    $scope.showLikeShop = function(){
+        $scope.like = JSON.parse(window.localStorage.getItem('like'));
+
+        if (!angular.isArray($scope.like)) {
+            $scope.like = [];
+        }
+        var ids = $scope.like;
+        var id = "";
+        for (var i = 0 ; i<ids.length ; i++){
+            if(i == 0){
+                id = id + ids[i];
+            }else{
+                id = id + ',' + ids[i];
+            }
+        }
+
+        if(ids.length > 0){
+            $http.get(apiUrl, {params: {keyid: keyid, format: format,id: id}})
+                .success(function(data, status, headers, config) {
+                    $scope.likeShops = $scope.createShops(data);
+                })
+                .error(function(data, status, headers, config) {
+                    alert('error');
+                });
+        }else{
+            $scope.likeShops = [];
+        }
+    };
+
+    //WebViewで開く
+    $scope.openWithBrowser = function(url) {
+        window.open(url, '_blank', 'location=no');
+    };
+
+    //お気に入りに追加
+    $scope.addLike = function(e, id){
+        e.stopPropagation();
+        $scope.like.unshift(id);
+        $scope.like.slice(0,9);
+        $scope.saveLike($scope.like);
+        $scope.showLikeShop();
+
+        for(var i=0; i<$scope.searchShops.length; i++){
+            if($scope.searchShops[i].id == id){
+                $scope.searchShops[i].isLiked = true;
+            }
+        }
+    };
+
+    //お気に入りをクリア
+    $scope.clearLike = function() {
+        $scope.like = [];
+        $scope.saveLike($scope.like);
+        $scope.showLikeShop();
+    };
+
+    /*
+     app.js内で利用される関数
+    */
+    //お気に入りデータをローカルストレージに保存
+    $scope.saveLike = function(like) {
+        window.localStorage.setItem('like', JSON.stringify(like));
+    };
+
+    //お店一覧に表示するデータを作成
+    $scope.createShops =function(data){
+        var shops = [];
+        if(data.total_hit_count > 1){
+            for(var i=0; i<data.rest.length; i++){
+                shops[i] = data.rest[i];
+                shops[i].isLiked = $scope.isLiked(data.rest[i].id);
+                if(typeof shops[i].image_url.shop_image1 == 'string'){
+                    shops[i].hasShopImage = true;
+                }else{
+                    shops[i].hasShopImage = false;
+                }
+            }
+        }else if(data.total_hit_count == 1){
+            shops[0] = data.rest;
+            shops[0].isLiked = $scope.isLiked(data.rest.id);
+            if(typeof shops[0].image_url.shop_image1 == 'string'){
+                shops[0].hasShopImage = true;
+            }else{
+                shops[0].hasShopImage = false;
+            }
+        }
+        return shops;
+    };
+
+    //お気に入りに入れているかを判別
+    $scope.isLiked = function(shopId){
+        var likeShopIds = JSON.parse(window.localStorage.getItem('like'));
+        console.log(likeShopIds);
+        if(likeShopIds == null){
+            return false;
+        }
+
+        if(likeShopIds.indexOf(shopId.toString()) >= 0){
+            return true;
+        }else{
+            return false;
+        }
+    };
+
+    /*
+     初回処理(likeオブジェクトを作成)
+    */
+    $scope.like = JSON.parse(window.localStorage.getItem('like'));
+    if (!angular.isArray($scope.like)) {
+        $scope.like = [];
+    }
+              
+              
+              
+              
+          });
+        ons.ready(function() {
+            console.log("Onsen UI is ready!");
+        });
+    </script>
+</head>
+<body>
+    <ons-page ng-controller="AppController as app">
+        <ons-tabbar>
+          <ons-tab page="search.html" label="検索" icon="square" active="true"></ons-tab>
+          <ons-tab page="like.html" label="お気に入り" ng-click="showLikeTab()" icon="square"></ons-tab>
+        </ons-tabbar>
+    </ons-page>
+
+    <ons-template id="search.html">
+        <ons-navigator var="navi">
+            <ons-page>
+                <ons-toolbar>
+                    <div class="center">現在地から検索</div>
+                </ons-toolbar>
+                <div>
+                    <div style="height: 160px;">
+                    </div>
+                    <ons-button modifier="large--cta" ng-click="search()">検索する</ons-button>
+                </div>
+            </ons-page>
+        </ons-navigator>
+    </ons-template>
+    
+    <ons-template id="result.html">
+        <ons-page>
+            <ons-toolbar>
+                <div class="left"><ons-back-button ons-if-platform="ios">戻る</ons-back-button></div>
+                <div class="center">検索結果</div>
+            </ons-toolbar>
+            <div style="height:80px; display:hidden;">
+                <ons-list>
+                    <ons-list-item ng-repeat="shop in searchShops" modifier="chevron">
+                        <div ng-click="openWithBrowser(shop.url_mobile)">
+                            <div>
+                                {{shop.name}}
+                            </div>
+                            <div ng-show="shop.hasShopImage == true">
+                                <img ng-src="{{shop.image_url.shop_image1}}">
+                            </div>
+                            <div>住所: {{shop.address}}</div>
+                            <div ng-show="shop.isLiked == false">
+                                <a href="javascript:void(0);" ng-click="addLike($event, shop.id)">お気に入りに追加</a>
+                            </div>
+                            <div ng-show="shop.isLiked == true">
+                                お気に入りに追加済み
+                            </div>
+                            <br>
+                        </div>
+                    </ons-list-item>
+                </ons-list>
+            </div>
+        </ons-page>
+    </ons-template>
+    
+    <ons-template id="like.html">
+        <ons-navigator var="navi2">
+            <ons-page>
+                <ons-toolbar>
+                    <div class="center">お気に入り</div>
+                    <div class="right"><ons-toolbar-button ng-click="clearLike()">クリア</ons-toolbar-button></div>
+                </ons-toolbar>
+                <div style="height:80px; display:hidden;">
+                    <div ng-show="likeShops.length > 0">
+                        <ons-list>
+                            <ons-list-item ng-repeat="shop in likeShops"  modifier="chevron">
+                                <div ng-click="openWithBrowser(shop.url_mobile)">
+                                    <div class="detail-title">
+                                        {{shop.name}}
+                                    </div>
+                                    <div ng-show="shop.hasShopImage == true">
+                                        <img ng-src="{{shop.image_url.shop_image1}}">
+                                    </div>
+                                    <div>住所: {{shop.address}}</div>
+                                    <div ng-show="shop.isLiked == false">
+                                        <a href="javascript:void(0);" ng-click="addLike($event, shop.id)">お気に入りに追加</a>
+                                    </div>
+                                    <div ng-show="shop.isLiked == true">
+                                        お気に入りに追加済み
+                                    </div>
+                                    <br>
+                                </div>
+                            </ons-list-item>
+                        </ons-list>
+                    </div>
+                </div>
+            </ons-page>
+        </ons-navigator>
+    </ons-template>
+
+</body>
+</html>
